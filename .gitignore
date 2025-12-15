@@ -10,6 +10,16 @@ env/
 .venv/
 
 # === 데이터 관련 ===
+data/
+*.zip
+*.csv
+*.pth
+*.h5
+*.npz
+*.npy
+*.ckpt
+*.pt
+
 datas/
 *.zip
 *.csv

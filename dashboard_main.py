@@ -1,4 +1,13 @@
 # dashboard_main.py
+import logging
+import matplotlib as mpl
+
+# 윈도우에서 있는 한글 폰트로 덮어쓰기
+mpl.rcParams["font.family"] = ["Malgun Gothic", "NanumGothic", "sans-serif"]
+mpl.rcParams["axes.unicode_minus"] = False
+
+# AppleGothic 못 찾았다는 경고 안 보이게
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
 import sys
 import os
@@ -65,7 +74,7 @@ class DashboardWindow(QMainWindow):
         dashboard = DashboardPage(model_manager=model_manager, data_store=data_store)
         self.setCentralWidget(dashboard)
 
-        self.setWindowTitle("L-POT : Lung / Liver Prediction Tool")
+        self.setWindowTitle("L-POT")
         self.resize(1400, 800)
 
 

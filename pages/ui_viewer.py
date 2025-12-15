@@ -1,13 +1,10 @@
-# pages/ui_viewers.py
+# pages/ui_viewer.py
+
 from __future__ import annotations
 
 import numpy as np
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QSlider,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QImage
@@ -16,27 +13,20 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 
+# =========================
+# 2D 뷰어 (기존 그대로)
+# =========================
 class CT2DViewer(QWidget):
-    """
-    3D CT 볼륨 (z, h, w)을 받아서 슬라이더로 슬라이스를 바꿔가며 보여주는 위젯.
-    - set_image(volume) 으로 데이터 주입
-    - HU 범위는 기본 (-1000, 400) 으로 윈도잉해서 8bit로 보여줌
-    """
-
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._image_data: np.ndarray | None = None
         self._build_ui()
 
-    # -----------------------------------------------------------
-    # UI 구성
-    # -----------------------------------------------------------
     def _build_ui(self):
         root = QVBoxLayout()
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(8)
 
-        # 메인 이미지
         self.image_label = QLabel("이미지가 없습니다.")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setMinimumSize(512, 512)
@@ -47,7 +37,6 @@ class CT2DViewer(QWidget):
         """)
         root.addWidget(self.image_label, stretch=1)
 
-        # 슬라이더 + 정보
         bottom = QHBoxLayout()
         bottom.setSpacing(10)
 
@@ -61,35 +50,12 @@ class CT2DViewer(QWidget):
         self.slice_slider.setValue(0)
         self.slice_slider.setEnabled(False)
         self.slice_slider.valueChanged.connect(self._on_slice_changed)
-        self.slice_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #999999;
-                height: 8px;
-                background: #e9fcff;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #2dc9c8;
-                border: 1px solid #2dc9c8;
-                width: 18px;
-                margin: -5px 0;
-                border-radius: 9px;
-            }
-        """)
         bottom.addWidget(self.slice_slider, stretch=1)
 
         root.addLayout(bottom)
-
         self.setLayout(root)
 
-    # -----------------------------------------------------------
-    # 외부에서 호출하는 메서드
-    # -----------------------------------------------------------
     def set_image(self, volume: np.ndarray):
-        """
-        CT 볼륨을 설정한다.
-        volume: (z, h, w) or (h, w) ndarray
-        """
         if volume is None:
             self._image_data = None
             self.image_label.setText("이미지가 없습니다.")
@@ -99,26 +65,17 @@ class CT2DViewer(QWidget):
 
         arr = np.asarray(volume)
         if arr.ndim == 2:
-            # (h, w) 만 들어오면 z 차원을 1로 처리
             arr = arr[np.newaxis, ...]
-
         if arr.ndim != 3:
-            raise ValueError("CT2DViewer.set_image() 는 (z, h, w) 형태의 배열만 받을 수 있습니다.")
+            raise ValueError("CT2DViewer.set_image() 는 (z, h, w) 형태만 받을 수 있습니다.")
 
         self._image_data = arr
-
-        # 슬라이더 설정
         z = arr.shape[0]
         self.slice_slider.setMaximum(z - 1)
         self.slice_slider.setValue(z // 2)
         self.slice_slider.setEnabled(True)
-
-        # 현재 슬라이스 표시
         self._show_slice(self.slice_slider.value())
 
-    # -----------------------------------------------------------
-    # 내부 동작
-    # -----------------------------------------------------------
     def _on_slice_changed(self, idx: int):
         self._show_slice(idx)
 
@@ -128,17 +85,13 @@ class CT2DViewer(QWidget):
 
         z, h, w = self._image_data.shape
         idx = max(0, min(idx, z - 1))
-
         self.lbl_info.setText(f"슬라이스: {idx} / {z - 1}")
 
         slice_img = self._image_data[idx]
-
-        # HU 윈도잉 (-1000 ~ 400) → 0~255
         slice_img = np.clip(slice_img, -1000, 400)
-        norm = (slice_img + 1000) / 1400.0  # 0~1
+        norm = (slice_img + 1000) / 1400.0
         norm = (norm * 255).astype(np.uint8)
 
-        # QImage로 변환
         height, width = norm.shape
         bytes_per_line = width
         q_img = QImage(
@@ -159,13 +112,16 @@ class CT2DViewer(QWidget):
         self.image_label.setPixmap(scaled)
 
 
+# =========================
+# 3D 뷰어 (휠 줌 추가)
+# =========================
 class Lung3DViewer(QWidget):
     """
-    간단한 3D 폐/결절 시각화용 위젯.
-    verts (N, 3)를 그리고, 예측/정답 마스크가 있으면 색을 다르게 표시한다.
+    matplotlib 3D를 PyQt 위젯으로 싸서 보여주는 간단한 뷰어.
+    - 마우스 휠 → 확대/축소 (matplotlib scroll_event 사용)
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent=None):
         super().__init__(parent)
 
         self.fig = Figure(figsize=(5, 5))
@@ -176,63 +132,53 @@ class Lung3DViewer(QWidget):
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
-    def update_plot(
-        self,
-        verts: np.ndarray | None,
-        predictions: np.ndarray | None = None,
-        ground_truth_mask: np.ndarray | None = None,
-        title: str = "3D Viewer",
-    ):
-        """
-        verts: (N, 3)
-        predictions: bool or 0/1 mask
-        ground_truth_mask: bool or 0/1 mask
-        """
+        # 현재 축 범위 저장
+        self._xlim = None
+        self._ylim = None
+        self._zlim = None
+
+        # 휠 스텝당 확대/축소 비율
+        self._zoom_in_factor = 0.9
+        self._zoom_out_factor = 1.1
+
+        # matplotlib 이벤트로 스크롤 받기
+        self.canvas.mpl_connect("scroll_event", self._on_scroll)
+
+    def update_plot(self, verts, predictions=None, title="3D Viewer", accuracy=None):
         self.ax.clear()
         self.ax.set_title(title)
 
         if verts is None or len(verts) == 0:
             self.ax.text(0.5, 0.5, 0.5, "데이터 없음", color="gray")
             self.canvas.draw()
+            self._xlim = self._ylim = self._zlim = None
             return
 
-        # 전체 구조 (희미하게)
+        verts = np.asarray(verts)
+
+        # 기본 구조
         self.ax.scatter(
-            verts[:, 0],
-            verts[:, 1],
-            verts[:, 2],
-            c="gray",
-            s=1,
-            alpha=0.2,
-            label="Structure",
+            verts[:, 0], verts[:, 1], verts[:, 2],
+            c="gray", s=1, alpha=0.2, label="Structure"
         )
 
-        # 예측 결과
+        # 예측만 별도로
         if predictions is not None and np.any(predictions):
-            pred_mask = predictions.astype(bool)
-            pos = verts[pred_mask]
+            mask = predictions.astype(bool)
+            pos = verts[mask]
             self.ax.scatter(
-                pos[:, 0],
-                pos[:, 1],
-                pos[:, 2],
-                c="red",
-                s=6,
-                alpha=0.6,
-                label="Prediction",
+                pos[:, 0], pos[:, 1], pos[:, 2],
+                c="red", s=6, alpha=0.6, label="Prediction"
             )
 
-        # 실제 GT
-        if ground_truth_mask is not None and np.any(ground_truth_mask):
-            gt_mask = ground_truth_mask.astype(bool)
-            gt = verts[gt_mask]
-            self.ax.scatter(
-                gt[:, 0],
-                gt[:, 1],
-                gt[:, 2],
-                c="cyan",
-                s=6,
-                alpha=0.6,
-                label="Ground Truth",
+        # 정확도 텍스트
+        if accuracy is not None:
+            self.ax.text2D(
+                0.02, 0.95,
+                f"F1: {accuracy:.3f}" if accuracy <= 1.0 else f"Score: {accuracy:.3f}",
+                transform=self.ax.transAxes,
+                color="black",
+                fontsize=9,
             )
 
         self.ax.legend(loc="upper right")
@@ -240,4 +186,40 @@ class Lung3DViewer(QWidget):
         self.ax.set_ylabel("Y")
         self.ax.set_zlabel("Z")
         self.ax.view_init(elev=30, azim=45)
+
+        # 현재 축 범위를 저장
+        self._xlim = self.ax.get_xlim3d()
+        self._ylim = self.ax.get_ylim3d()
+        self._zlim = self.ax.get_zlim3d()
+
+        self.canvas.draw()
+
+    # -------------------------------------------------
+    # matplotlib scroll_event 핸들러
+    # -------------------------------------------------
+    def _on_scroll(self, event):
+        """
+        event.step 이 +1이면 위로(보통 확대), -1이면 아래로(보통 축소)
+        """
+        if self._xlim is None:
+            return
+
+        # matplotlib에서는 event.button이 'up'/'down'으로도 들어올 수 있음
+        if getattr(event, "button", None) == "up" or event.step > 0:
+            factor = self._zoom_in_factor
+        else:
+            factor = self._zoom_out_factor
+
+        def _scale(lim, f):
+            center = (lim[0] + lim[1]) / 2.0
+            half = (lim[1] - lim[0]) / 2.0 * f
+            return (center - half, center + half)
+
+        self._xlim = _scale(self._xlim, factor)
+        self._ylim = _scale(self._ylim, factor)
+        self._zlim = _scale(self._zlim, factor)
+
+        self.ax.set_xlim3d(self._xlim)
+        self.ax.set_ylim3d(self._ylim)
+        self.ax.set_zlim3d(self._zlim)
         self.canvas.draw()
