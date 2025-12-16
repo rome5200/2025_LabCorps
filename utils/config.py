@@ -16,7 +16,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _DATA_ROOT = Path(os.environ.get("POT_DATA_ROOT", _PROJECT_ROOT / "datas")).resolve()
 
 # organ별 하위 폴더 이름
-_ORGANS = ["lung", "liver"]
+_ORGANS = ["lung"]
 
 # organ별 features / labels 디렉터리 생성
 FEATURES_DIRS = {}

@@ -32,11 +32,8 @@ class ModelLoader:
             else Path(__file__).resolve().parents[1]
         )
 
-        # 공통 리소스
         self.SPIRAL_PATH = resource_path("models/spiral_9.npy")
-        # 폐/간 가중치
         self.LUNG_WEIGHT_PATH = resource_path("models/new_2.pth")
-        self.LIVER_WEIGHT_PATH = resource_path("models/mask_merged_ver4.pth")
 
     def _build_backbone(self, spiral_idx_list, device):
         num_blocks = len(spiral_idx_list)
@@ -89,13 +86,11 @@ class ModelLoader:
             return {
                 "device": None,
                 "spiral_idx": None,
+                "spiral_idx_lung": spiral_idx_list,
                 "expected_vertex_count": None,
                 "lung_model": None,
-                "liver_model": None,
                 "threshold": 0.5,
-                "liver_threshold": 0.5,
                 "model_accuracy": None,
-                "liver_accuracy": None,
             }
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -120,33 +115,14 @@ class ModelLoader:
             lung_model, self.LUNG_WEIGHT_PATH, device
         )
 
-        # 2) 간 모델 (있으면)
-        liver_model = None
-        liver_thr = lung_thr
-        liver_acc = None
-        if self.LIVER_WEIGHT_PATH.exists():
-            liver_model = self._build_backbone(spiral_idx_list, device)
-            liver_model, liver_thr, liver_acc = self._load_weight(
-                liver_model, self.LIVER_WEIGHT_PATH, device
-            )
-        else:
-            print("[models.model_loader] 간 가중치가 없어서 폐 모델만 로드했습니다.")
-
         print(f"모델 로드 완료 (device={device})")
 
         return {
             "device": device,
             "expected_vertex_count": expected_vertex_count,
-            # 공통 spiral + 장기별 spiral (지금은 동일한 걸 넣음)
             "spiral_idx": spiral_idx_list,
             "spiral_idx_lung": spiral_idx_list,
-            "spiral_idx_liver": spiral_idx_list,
-            # 모델
             "lung_model": lung_model,
-            "liver_model": liver_model,
-            # threshold / accuracy
             "threshold": lung_thr,
             "model_accuracy": lung_acc,
-            "liver_threshold": liver_thr,
-            "liver_accuracy": liver_acc,
         }

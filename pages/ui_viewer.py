@@ -12,7 +12,6 @@ from PyQt6.QtGui import QPixmap, QImage
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-
 # =========================
 # 2D 뷰어 (기존 그대로)
 # =========================
