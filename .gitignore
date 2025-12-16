@@ -39,3 +39,6 @@ datas/
 # === OS 기본 ===
 .DS_Store
 Thumbs.db
+
+build/
+dist/
